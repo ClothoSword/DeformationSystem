@@ -8,7 +8,7 @@
 void FDeformationSystemModule::StartupModule()
 {
 	FString PluginShaderDir = FPaths::Combine(IPluginManager::Get().FindPlugin(TEXT("DeformationSystem"))->GetBaseDir(), TEXT("Shaders"));
-	AddShaderSourceDirectoryMapping(TEXT("/Plugin/DeformationSystem"), PluginShaderDir);
+	AddShaderSourceDirectoryMapping(TEXT("/Plugins/DeformationSystem"), PluginShaderDir);
 }
 
 void FDeformationSystemModule::ShutdownModule()

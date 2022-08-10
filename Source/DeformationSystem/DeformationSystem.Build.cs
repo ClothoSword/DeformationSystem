@@ -26,6 +26,9 @@ public class DeformationSystem : ModuleRules
 			new string[]
 			{
 				"Core",
+				"CoreUObject",
+				"Engine",
+				"RHI"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
@@ -34,10 +37,9 @@ public class DeformationSystem : ModuleRules
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"CoreUObject",
-				"Engine",
-				"Slate",
-				"SlateCore",
+				"RenderCore",
+				"Renderer",
+				"Projects",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
