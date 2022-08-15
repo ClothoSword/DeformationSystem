@@ -6,4 +6,4 @@
 #include "RendererInterface.h"
 #include "RenderGraphResources.h"
 
-void DeformationFilterPass(FRDGBuilder& GraphBuilder, const FSceneView& View, struct FDeformationPayload* DeformationPayload);
+void DeformationFilterPass(FRDGBuilder& GraphBuilder, const FSceneView& View, class FDeformationSceneViewExtension* DeformationSceneViewExtension);

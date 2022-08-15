@@ -10,7 +10,9 @@
 
 class UTextureRenderTarget2D;
 class USceneCaptureComponent2D;
-class APawn;
+class UMaterialParameterCollection;
+class UMaterialInterface;
+class ACharacter;
 class FDeformationSceneViewExtension;
 
 struct FDeformationPayload 
@@ -24,10 +26,13 @@ struct FDeformationPayload
 	float SnowAddition;
 	float DeltaTime;
 
-	FTexture2DRHIRef DepthRTSRV;
-	FTexture2DRHIRef PersistentDepthSRV;
-	FUnorderedAccessViewRHIRef PersistentDepthUAV;
-	FUnorderedAccessViewRHIRef DeformUAV;
+	FTexture2DRHIRef DepthRT;
+	FTexture2DRHIRef DeformNormalAndHeight;
+
+	FRDGTextureRef PersistentDepth0;
+	FRDGTextureRef PersistentDepth1;
+
+	uint32 ExcuteCounter = 0;
 };
 
 UCLASS(BlueprintType, Transient)
@@ -56,17 +61,16 @@ public:
 	// USubsystem implementation End
 
 public:
-	UTextureRenderTarget2D* DepthRT;
+	UPROPERTY()
 	USceneCaptureComponent2D* DepthCaptureComponent;
-
 	UPROPERTY()
-	UTextureRenderTarget2D* PersistentDepth0;
-	
-	UPROPERTY()
-	UTextureRenderTarget2D* PersistentDepth1;
-
+	UTextureRenderTarget2D* DepthRT;
 	UPROPERTY()
 	UTextureRenderTarget2D* DeformNormalHeightTexture;
+	UPROPERTY()
+	UMaterialParameterCollection* DeformationMPC;
+	UPROPERTY()
+	UMaterialInterface* SceneCaptureMaterial;
 
 private:
 	uint16 DepthRTResolution;
@@ -74,7 +78,9 @@ private:
 	float PostDeltaWS;
 	FVector2f SampleOffset;
 
-	APawn* PlayerPawn;
+	ACharacter* Character;
+	AActor* DeformationActor;
 
 	TSharedPtr<FDeformationSceneViewExtension, ESPMode::ThreadSafe> DeformationSceneViewExtension;
+	UWorld* CachedWorld;
 };

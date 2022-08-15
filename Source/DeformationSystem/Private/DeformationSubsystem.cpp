@@ -4,30 +4,60 @@
 #include "DeformationSceneViewExtension.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialParameterCollection.h"
 #include "Kismet/GameplayStatics.h"
-#include "GameFramework/Pawn.h"
+#include "GameFramework/Character.h"
 
 void UDeformationSubsystem::Tick(float DeltaTime)
 {
-	FVector PawnLocation = FVector::ZeroVector;
-	if (!PlayerPawn)
+	FVector CharacterLocation = FVector::ZeroVector;
+	if (CachedWorld != GetWorld())
 	{
-		PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-		PawnLocation = PlayerPawn->GetActorLocation();
-		DepthCaptureComponent->GetOwner()->SetActorLocation(FVector(PawnLocation.X, PawnLocation.Y, PawnLocation.Z - 500));
-		DepthCaptureComponent->SetRelativeRotation(FRotator(0.0f, 90.0f, 90.0f));
+		Character = Cast<ACharacter>(UGameplayStatics::GetPlayerPawn(GetWorld(), 0));
+		if (!Character || !Character->GetMesh())
+			return;
+
+		CachedWorld = GetWorld();
+		Character->GetMesh()->bRenderCustomDepth = true;
+		CharacterLocation = Character->GetActorLocation();
+		DeformationActor = GetWorld()->SpawnActor<AActor>();
+		DepthCaptureComponent = NewObject<USceneCaptureComponent2D>(DeformationActor, TEXT("DepthSceneCapture"));
+		DeformationActor->SetActorTransform(FTransform());
+		DeformationActor->SetRootComponent(DepthCaptureComponent);
+		DeformationActor->SetActorLocation(FVector(CharacterLocation.X, CharacterLocation.Y, CharacterLocation.Z - 500));
+
+		DeformationSceneViewExtension->CaptureOrigin = DeformationActor->GetActorLocation();
+
+		DepthCaptureComponent->ProjectionType = ECameraProjectionMode::Orthographic;
+		DepthCaptureComponent->OrthoWidth = SceneCaptureSizeWS;
+		DepthCaptureComponent->TextureTarget = DepthRT;
+		DepthCaptureComponent->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+		DepthCaptureComponent->bCaptureEveryFrame = false;
+		DepthCaptureComponent->bCaptureOnMovement = false;
+		DepthCaptureComponent->bAlwaysPersistRenderingState = true;
+		DepthCaptureComponent->SetRelativeRotation(FRotator::MakeFromEuler(FVector(0.0f, 90.0f, 90.0f)));
+		if (SceneCaptureMaterial)
+		{
+			DepthCaptureComponent->PostProcessSettings.WeightedBlendables.Array.SetNumZeroed(1);
+			DepthCaptureComponent->PostProcessSettings.WeightedBlendables.Array[0].Weight = 1.0f;
+			DepthCaptureComponent->PostProcessSettings.WeightedBlendables.Array[0].Object = SceneCaptureMaterial;
+		}
+		
+		DepthCaptureComponent->RegisterComponent();
+
 		DepthCaptureComponent->CaptureScene();
 
 		return;
 	}
-	PawnLocation = PlayerPawn->GetActorLocation();
-	FVector2f CurrentLocation = FVector2f(PawnLocation.X, PawnLocation.Y);
+	CharacterLocation = Character->GetActorLocation();
+	FVector2f CurrentLocation = FVector2f(CharacterLocation.X, CharacterLocation.Y);
 	SampleOffset = FVector2f(FMath::Floor(CurrentLocation.X / PostDeltaWS), FMath::Floor(CurrentLocation.Y / PostDeltaWS)) - CurrentLocation;
+	SampleOffset = FVector2f::ZeroVector;
 
 	DeformationSceneViewExtension->DeformationPayload->SampleOffset = SampleOffset;
 	DeformationSceneViewExtension->DeformationPayload->DeltaTime = DeltaTime;
 	DeformationSceneViewExtension->DeformationPayload->InteractionCenterWS = CurrentLocation;
-
 	DepthCaptureComponent->GetOwner()->AddActorWorldOffset(FVector(SampleOffset.X, SampleOffset.Y, 0.0f));
 	DepthCaptureComponent->CaptureScene();
 }
@@ -54,45 +84,32 @@ void UDeformationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	DepthRT->InitAutoFormat(DepthRTResolution, DepthRTResolution);
 	DepthRT->UpdateResourceImmediate(true);
 
-	PersistentDepth0 = NewObject<UTextureRenderTarget2D>(this, TEXT("PersistentDepth0"));
-	PersistentDepth0->RenderTargetFormat = RTF_R16f;
-	PersistentDepth0->InitAutoFormat(DepthRTResolution, DepthRTResolution);
-	PersistentDepth0->UpdateResourceImmediate(true);
-
-	PersistentDepth1 = NewObject<UTextureRenderTarget2D>(this, TEXT("PersistentDepth1"));
-	PersistentDepth1->RenderTargetFormat = RTF_R16f;
-	PersistentDepth1->InitAutoFormat(DepthRTResolution, DepthRTResolution);
-	PersistentDepth1->UpdateResourceImmediate(true);
-
 	DeformNormalHeightTexture = NewObject<UTextureRenderTarget2D>(this, TEXT("DeformNormalHeightTexture"));
 	DeformNormalHeightTexture->RenderTargetFormat = RTF_RGB10A2;
+	DeformNormalHeightTexture->bCanCreateUAV = true;
 	DeformNormalHeightTexture->InitAutoFormat(DepthRTResolution, DepthRTResolution);
 	DeformNormalHeightTexture->UpdateResourceImmediate(true);
 
-	AActor* TempActor = NewObject<AActor>(World->GetCurrentLevel());
-	TempActor->SetActorTransform(FTransform());
+	const FString DeformationSystem = TEXT("DeformationSystem");
+	const FString PluginPath = FPaths::Combine(FPaths::ProjectPluginsDir(), DeformationSystem);
 
-	DepthCaptureComponent = NewObject<USceneCaptureComponent2D>(TempActor, TEXT("DepthSceneCapture"));
-	DepthCaptureComponent->ProjectionType = ECameraProjectionMode::Orthographic;
-	DepthCaptureComponent->OrthoWidth = SceneCaptureSizeWS;
-	DepthCaptureComponent->TextureTarget = DepthRT;
-	DepthCaptureComponent->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
-	DepthCaptureComponent->bCaptureEveryFrame = false;
-	DepthCaptureComponent->bCaptureOnMovement = false;
+	SceneCaptureMaterial = LoadObject<UMaterial>(NULL, TEXT("/DeformationSystem/M_SceneCapturePP"), NULL, LOAD_None, NULL);
+	DeformationMPC = LoadObject<UMaterialParameterCollection>(NULL, TEXT("/DeformationSystem/MPC_Deformation"), NULL, LOAD_None, NULL);
 
 	DeformationSceneViewExtension = FSceneViewExtensions::NewExtension<FDeformationSceneViewExtension>(World);
 
 	if(!DeformationSceneViewExtension->DeformationPayload)
 		DeformationSceneViewExtension->DeformationPayload = new FDeformationPayload;
 
-	DeformationSceneViewExtension->DeformationPayload->InteractionTextureResolution = DepthRTResolution;
-	DeformationSceneViewExtension->DeformationPayload->PostDelta = PostDeltaWS;
-	DeformationSceneViewExtension->DeformationPayload->TemporalFilterFactor = 2.0;
-	DeformationSceneViewExtension->DeformationPayload->SnowAddition = 0.0;
-	DeformationSceneViewExtension->DeformationPayload->DepthRTSRV = DepthRT->GetRenderTargetResource()->GetRenderTargetTexture();
-	DeformationSceneViewExtension->DeformationPayload->PersistentDepthSRV = PersistentDepth0->GetRenderTargetResource()->GetRenderTargetTexture();
-	DeformationSceneViewExtension->DeformationPayload->PersistentDepthUAV = PersistentDepth1->GetRenderTargetResource()->GetRenderTargetUAV();
-	DeformationSceneViewExtension->DeformationPayload->DeformUAV = DeformNormalHeightTexture->GetRenderTargetResource()->GetRenderTargetUAV();
+	ENQUEUE_RENDER_COMMAND(EndCaptureCommand)([&](FRHICommandListImmediate& RHICommandList)
+	{
+		DeformationSceneViewExtension->DeformationPayload->InteractionTextureResolution = DepthRTResolution;
+		DeformationSceneViewExtension->DeformationPayload->PostDelta = PostDeltaWS;
+		DeformationSceneViewExtension->DeformationPayload->TemporalFilterFactor = 2.0;
+		DeformationSceneViewExtension->DeformationPayload->SnowAddition = 0.0;
+		DeformationSceneViewExtension->DeformationPayload->DepthRT = DepthRT->GetRenderTargetResource()->GetRenderTargetTexture();
+		DeformationSceneViewExtension->DeformationPayload->DeformNormalAndHeight = DeformNormalHeightTexture->GetRenderTargetResource()->GetRenderTargetTexture();
+	});
 }
 
 void UDeformationSubsystem::Deinitialize()
@@ -114,4 +131,5 @@ UDeformationSubsystem::UDeformationSubsystem()
 	DepthRTResolution = 1024;
 	PostDeltaWS = (float)SceneCaptureSizeWS / DepthRTResolution;
 	SampleOffset = FVector2f::Zero();
+	CachedWorld = nullptr;
 }

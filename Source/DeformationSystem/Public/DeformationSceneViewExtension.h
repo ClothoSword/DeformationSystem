@@ -19,5 +19,17 @@ public:
 	virtual void PreRenderView_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView) override;
 	// End FSceneViewExtensionBase implementation
 
-	struct FDeformationPayload* DeformationPayload;
+	struct FDeformationPayload* DeformationPayload = nullptr;
+
+	TRefCountPtr<IPooledRenderTarget> PersistentDepth0 = nullptr;
+	TRefCountPtr<IPooledRenderTarget> PersistentDepth1 = nullptr;
+	TRefCountPtr<IPooledRenderTarget> DepthRT = nullptr;
+	TRefCountPtr<IPooledRenderTarget> DeformNormalAndHeight = nullptr;
+
+	FVector4f InvDeviceZToWorldZTransform;
+
+	FVector CaptureOrigin = FVector::ZeroVector;
+
+	//FRDGTextureRef PersistentDepth0 = nullptr;
+	//FRDGTextureRef PersistentDepth1 = nullptr;
 };
