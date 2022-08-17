@@ -32,19 +32,20 @@ groupshared float HeightLDS[324];
 [numthreads(16, 16, 1)]
 void MainCS(uint3 DispatchThreadID : SV_DispatchThreadID, uint GroupIndex : SV_GroupIndex, uint3 GroupThreadID : SV_GroupThreadID, uint3 GroupID : SV_GroupID )
 {
-    uint2 SharedMemoryLoadPos = (GroupID.xy << 4) - 1 - (uint2) SampleOffset;
-    float TempHeight = PrevDeformation.Load(uint3(SharedMemoryLoadPos + uint2(GroupIndex % 18, GroupIndex / 18), 0));
+    int2 SampleOffsetRemap = int2(-SampleOffset.x, SampleOffset.y);
+    int2 SharedMemoryLoadPos = (GroupID.xy << 4) - int2(1, 1) + SampleOffsetRemap;
+    float TempHeight = PrevDeformation.Load(int3(SharedMemoryLoadPos + int2(GroupIndex % 18, GroupIndex / 18), 0));
     HeightLDS[GroupIndex] = TempHeight;
     uint ExtraIndex = GroupIndex + 256;
 
     if (ExtraIndex < 324)
     {
-        float TempHeight1 = PrevDeformation.Load(uint3(SharedMemoryLoadPos + uint2(ExtraIndex % 18, ExtraIndex / 18), 0));
+        float TempHeight1 = PrevDeformation.Load(int3(SharedMemoryLoadPos + int2(ExtraIndex % 18, ExtraIndex / 18), 0));
         HeightLDS[ExtraIndex] = TempHeight1;
     }
 
     float ResultHeight = 0.0;
-    float2 UV01 = DispatchThreadID.xy / float2(InteractionTextureResMinus1, InteractionTextureResMinus1);
+    float2 UV01 = (DispatchThreadID.xy - float2(0.5, 0.5)) / float2(InteractionTextureResMinus1, InteractionTextureResMinus1);
     float2 RenderAreaMinMax = float2(0.5 - RenderAreaScalar * 0.5, RenderAreaScalar * 0.5 + 0.5);
   
     GroupMemoryBarrierWithGroupSync();
@@ -64,43 +65,34 @@ void MainCS(uint3 DispatchThreadID : SV_DispatchThreadID, uint GroupIndex : SV_G
     float3 Normal = normalize(float3((Left - Right) * MaxSnowDepth, (Top - Down) * MaxSnowDepth, PostDeltaTimes2));
     float TemporalFilter = saturate(DeltaTime * 30 * (1.0 - saturate(Normal.z * TemporalFilterFactor)));
     float TemporalFilterHeight = (Average - Center) * TemporalFilterFlag * TemporalFilter + Center;
-    ResultHeight = max(TemporalFilterHeight, Center);
     
-    bool bInArea = (DispatchThreadID.xy - (uint2) SampleOffset) <= InteractionTextureResMinus1 && 0 <= (DispatchThreadID - (uint2) SampleOffset) && RenderAreaMinMax.xx <= UV01 && UV01 <= RenderAreaMinMax.yy;
+    bool bInArea = (DispatchThreadID.xy + SampleOffsetRemap) <= InteractionTextureResMinus1 && 0 <= (DispatchThreadID + SampleOffsetRemap) && RenderAreaMinMax.xx <= UV01 && UV01 <= RenderAreaMinMax.yy;
     if (bInArea)
     {
+            ResultHeight = max(TemporalFilterHeight, Center);
+        
             float2 ScaledUV01 = (UV01 - RenderAreaMinMax.xx) / RenderAreaScalar;
             float2 NDC = pow(abs(ScaledUV01 * 2.0 - 1.0), NonUniformExponent);
-            float2 WarpNDC = (ScaledUV01 - 0.5) * NDC;
-            float Depth = Texture2DSampleLevel(DepthRT, DepthSampler, float2(WarpNDC.x + 0.5, WarpNDC.y + 0.5), 0).x;
+            float2 WarpNDC = (ScaledUV01 * 2.0 - 1.0) * NDC;
+            WarpNDC = WarpNDC * 0.5 + 0.5;
+            float Depth = Texture2DSampleLevel(DepthRT, DepthSampler, WarpNDC, 0).x;
             if (Depth < 65504.0f)
             {
-                float2 InteractionCornerWS = InteractionCenterWS; // - (InteractionAreaWorldSize * 0.5);
-                float2 HeightSamplePosWS = (1.0 - UV01);// * InteractionAreaWorldSize + InteractionCornerWS;
-		  
-                float2 HeightTextureSampleUV = HeightSamplePosWS;// * ProbeTextureScale + ProbeTextureBias;
-                float Height01 = Texture2DSampleLevel(DepthRT, DepthSampler, float2(WarpNDC.x + 0.5, WarpNDC.y + 0.5), 0).y;
-                //float SceneHeight = Height01 * (TerrainMaxHeight - TerrainMinHeight) + TerrainMinHeight;
-                float SceneHeight = Texture2DSampleLevel(DepthRT, DepthSampler, float2(WarpNDC.x + 0.5, WarpNDC.y + 0.5), 0).y; //DeformConvertFromDeviceZ(Height01);
-                //float InteractionObjectHeight = Depth * mLinNormDepthToWorldScale + mLinNormDepthToWorldBias;
-                float InteractionObjectHeight = Depth;//DeformConvertFromDeviceZ(Depth);
+                float SceneHeight = Texture2DSampleLevel(DepthRT, DepthSampler, WarpNDC, 0).y;
+                float InteractionObjectHeight = Depth;
                 if (InteractionObjectHeight < (SceneHeight + MaxSnowDepth))
                     ResultHeight = max(1.0 - saturate((InteractionObjectHeight - SceneHeight) / MaxSnowDepth), ResultHeight);
-            }
-            else
-            {
-                PersistanceTexture[DispatchThreadID.xy] = 0.0;
-                OutputTexture[DispatchThreadID.xy] = float4(0.5, 0.5, 0.0, 1.0);
-                return;
             }
     }
 
     float2 BorderModulateFactorUV = saturate((1.0 - abs(UV01 * 2.0 - 1.0)) * 10);
-    float BorderModulateFactor = min(BorderModulateFactorUV.x, BorderModulateFactorUV.y);
-    float3 RemapNormal = normalize(float3(Normal.x, Normal.y, (Normal.z - 1.0)) * BorderModulateFactor);
-    float RemapNormalFactor = 1.0 / sqrt(RemapNormal.z * 8.0 * (((Normal.z - 1.0) * BorderModulateFactor) + 1.0) + 8.0) + 0.5;
+    float BorderModulateFactor = min(BorderModulateFactorUV.x, BorderModulateFactorUV.y);   //270
+    float RemapZ = (Normal.z - 1.0) * BorderModulateFactor + 1.0; //275
+    float3 RemapNormal = float3(Normal.x, Normal.y, RemapZ);
+    float ReverseRemapNormalLength = 1.0 / length(RemapNormal); // 277
+    float RemapNormalFactor = 1.0 / sqrt(8.0 * ReverseRemapNormalLength * RemapZ + 8.0);
 
-    float2 NormalXY = float2(RemapNormal.xy * RemapNormalFactor);
+    float2 NormalXY = float2(RemapNormal.xy * BorderModulateFactor * ReverseRemapNormalLength * RemapNormalFactor) + 0.5;
     float FilterHeight = BorderModulateFactor * saturate(max(Average, Center) - SnowAdditionHeightPrec);
     
     PersistanceTexture[DispatchThreadID.xy] = saturate(ResultHeight - SnowAddition);

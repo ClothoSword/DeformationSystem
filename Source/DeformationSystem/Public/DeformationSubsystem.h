@@ -25,9 +25,10 @@ struct FDeformationPayload
 	float TemporalFilterFactor;
 	float SnowAddition;
 	float DeltaTime;
+	float ExtrudedHeight;
 
 	FTexture2DRHIRef DepthRT;
-	FTexture2DRHIRef DeformNormalAndHeight;
+	FTexture2DRHIRef DeformNormalAndDepth;
 
 	FRDGTextureRef PersistentDepth0;
 	FRDGTextureRef PersistentDepth1;
@@ -66,7 +67,7 @@ public:
 	UPROPERTY()
 	UTextureRenderTarget2D* DepthRT;
 	UPROPERTY()
-	UTextureRenderTarget2D* DeformNormalHeightTexture;
+	UTextureRenderTarget2D* DeformNormalDepthTexture;
 	UPROPERTY()
 	UMaterialParameterCollection* DeformationMPC;
 	UPROPERTY()
@@ -77,6 +78,7 @@ private:
 	uint16 SceneCaptureSizeWS;
 	float PostDeltaWS;
 	FVector2f SampleOffset;
+	float ExtrudedHeight;
 
 	ACharacter* Character;
 	AActor* DeformationActor;

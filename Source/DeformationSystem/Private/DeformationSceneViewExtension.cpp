@@ -70,10 +70,10 @@ void FDeformationSceneViewExtension::PreRenderView_RenderThread(FRDGBuilder& Gra
 		GraphBuilder.RHICmdList.Transition(FRHITransitionInfo(PersistentDepth1->GetRHI(), ERHIAccess::RTV, ERHIAccess::SRVMask));
 	}
 
-	if (!DeformNormalAndHeight)
+	if (!DeformNormalAndDepth)
 	{
-		FPooledRenderTargetDesc Desc = FPooledRenderTargetDesc::Create2DDesc(FIntPoint(DeformationPayload->InteractionTextureResolution), PF_A2B10G10R10, FClearValueBinding::Black, TexCreate_None, TexCreate_UAV, false);
-		GRenderTargetPool.FindFreeElement(GraphBuilder.RHICmdList, Desc, DeformNormalAndHeight, TEXT("DeformNormalAndHeight"));
+		FPooledRenderTargetDesc Desc = FPooledRenderTargetDesc::Create2DDesc(FIntPoint(DeformationPayload->InteractionTextureResolution), PF_A2B10G10R10, FClearValueBinding(FLinearColor(0.5, 0.5, 0, 1.0)), TexCreate_None, TexCreate_UAV, false);
+		GRenderTargetPool.FindFreeElement(GraphBuilder.RHICmdList, Desc, DeformNormalAndDepth, TEXT("DeformNormalAndDepth"));
 	}
 
 	if (!DepthRT)

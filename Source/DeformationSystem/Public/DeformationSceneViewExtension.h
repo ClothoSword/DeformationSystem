@@ -24,7 +24,7 @@ public:
 	TRefCountPtr<IPooledRenderTarget> PersistentDepth0 = nullptr;
 	TRefCountPtr<IPooledRenderTarget> PersistentDepth1 = nullptr;
 	TRefCountPtr<IPooledRenderTarget> DepthRT = nullptr;
-	TRefCountPtr<IPooledRenderTarget> DeformNormalAndHeight = nullptr;
+	TRefCountPtr<IPooledRenderTarget> DeformNormalAndDepth = nullptr;
 
 	FVector4f InvDeviceZToWorldZTransform;
 
