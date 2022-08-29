@@ -10,22 +10,13 @@ float SnowAdditionHeightPrec;
 float MaxSnowDepth;
 uint TemporalFilterFlag;
 float2 SampleOffset;
-float2 InteractionCenterWS;
 float NonUniformExponent;
-float2 ViewToClipDepthFactor;
-float4 InvDeviceZToWorldZTransform;
 
 Texture2D PrevDeformation;
 Texture2D DepthRT;
 SamplerState DepthSampler;
 RWTexture2D<float> PersistanceTexture;
 RWTexture2D<float4> OutputTexture;
-
-float DeformConvertFromDeviceZ(float DeviceZ)
-{
-	// Supports ortho and perspective, see CreateInvDeviceZToWorldZTransform()
-    return DeviceZ * InvDeviceZToWorldZTransform[0] + InvDeviceZToWorldZTransform[1] + 1.0f / (DeviceZ * InvDeviceZToWorldZTransform[2] - InvDeviceZToWorldZTransform[3]);
-}
 
 groupshared float HeightLDS[324];
 
@@ -86,10 +77,10 @@ void MainCS(uint3 DispatchThreadID : SV_DispatchThreadID, uint GroupIndex : SV_G
     }
 
     float2 BorderModulateFactorUV = saturate((1.0 - abs(UV01 * 2.0 - 1.0)) * 10);
-    float BorderModulateFactor = min(BorderModulateFactorUV.x, BorderModulateFactorUV.y);   //270
-    float RemapZ = (Normal.z - 1.0) * BorderModulateFactor + 1.0; //275
+    float BorderModulateFactor = min(BorderModulateFactorUV.x, BorderModulateFactorUV.y);
+    float RemapZ = (Normal.z - 1.0) * BorderModulateFactor + 1.0;
     float3 RemapNormal = float3(Normal.x, Normal.y, RemapZ);
-    float ReverseRemapNormalLength = 1.0 / length(RemapNormal); // 277
+    float ReverseRemapNormalLength = 1.0 / length(RemapNormal);
     float RemapNormalFactor = 1.0 / sqrt(8.0 * ReverseRemapNormalLength * RemapZ + 8.0);
 
     float2 NormalXY = float2(RemapNormal.xy * BorderModulateFactor * ReverseRemapNormalLength * RemapNormalFactor) + 0.5;

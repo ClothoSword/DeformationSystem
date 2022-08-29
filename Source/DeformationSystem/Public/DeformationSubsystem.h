@@ -45,7 +45,7 @@ public:
 	UDeformationSubsystem();
 
 	// FTickableGameObject implementation Begin
-	virtual bool IsTickable() const override { return true; }
+	virtual bool IsTickable() const override;
 	virtual bool IsTickableInEditor() const override { return true; }
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
@@ -74,13 +74,15 @@ public:
 	UMaterialInterface* SceneCaptureMaterial;
 
 private:
+	bool bExecuteFilter = false;
 	uint16 DepthRTResolution;
 	uint16 SceneCaptureSizeWS;
 	float PostDeltaWS;
 	FVector2f SampleOffset;
 	float ExtrudedHeight;
+	float TickTimer;
 
-	ACharacter* Character;
+	APawn* CharacterPawn;
 	AActor* DeformationActor;
 
 	TSharedPtr<FDeformationSceneViewExtension, ESPMode::ThreadSafe> DeformationSceneViewExtension;

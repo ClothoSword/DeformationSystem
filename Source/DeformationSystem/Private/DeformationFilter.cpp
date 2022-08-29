@@ -26,8 +26,6 @@ class FDeformationFilterCS : public FGlobalShader
 		SHADER_PARAMETER(float, NonUniformExponent)
 		SHADER_PARAMETER(uint32, TemporalFilterFlag)
 		SHADER_PARAMETER(FVector2f, SampleOffset)
-		SHADER_PARAMETER(FVector2f, InteractionCenterWS)
-		SHADER_PARAMETER(FVector4f, InvDeviceZToWorldZTransform)
 		SHADER_PARAMETER_SAMPLER(SamplerState, DepthSampler)
 		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D, DepthRT)
 		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D, PrevDeformation)
@@ -57,17 +55,14 @@ void DeformationFilterPass(FRDGBuilder& GraphBuilder, const FSceneView& View, FD
 	PassParameters->TemporalFilterFactor = DeformationPayload->TemporalFilterFactor;
 	PassParameters->SnowAddition = DeformationPayload->SnowAddition;
 	PassParameters->TemporalFilterFlag = 1;
-	//PassParameters->NonUniformExponent = -0.3;
-	PassParameters->NonUniformExponent = 0.f;
-	PassParameters->InteractionCenterWS = DeformationPayload->InteractionCenterWS;
-	PassParameters->InvDeviceZToWorldZTransform = DeformationSceneViewExtension->InvDeviceZToWorldZTransform;
+	PassParameters->NonUniformExponent = 0.f; // -0.3
 
-	GraphBuilder.RHICmdList.CopyTexture(DeformationPayload->DepthRT, DeformationSceneViewExtension->DepthRT->GetRHI(), {});
-	FRDGTextureRef DepthRTTex = GraphBuilder.RegisterExternalTexture(DeformationSceneViewExtension->DepthRT);
+	GraphBuilder.RHICmdList.CopyTexture(DeformationPayload->DepthRT, GDeformationRenderResources.DepthRT->GetRHI(), {});
+	FRDGTextureRef DepthRTTex = GraphBuilder.RegisterExternalTexture(GDeformationRenderResources.DepthRT);
 	PassParameters->DepthRT = GraphBuilder.CreateSRV(DepthRTTex);
 
-	FRDGTextureRef PersistentDepthTex0 = GraphBuilder.RegisterExternalTexture(DeformationSceneViewExtension->PersistentDepth0);
-	FRDGTextureRef PersistentDepthTex1 = GraphBuilder.RegisterExternalTexture(DeformationSceneViewExtension->PersistentDepth1);
+	FRDGTextureRef PersistentDepthTex0 = GraphBuilder.RegisterExternalTexture(GDeformationRenderResources.PersistentDepth0);
+	FRDGTextureRef PersistentDepthTex1 = GraphBuilder.RegisterExternalTexture(GDeformationRenderResources.PersistentDepth1);
 
 	if (DeformationPayload->ExcuteCounter % 2 == 0)
 	{
@@ -80,7 +75,7 @@ void DeformationFilterPass(FRDGBuilder& GraphBuilder, const FSceneView& View, FD
 		PassParameters->PersistanceTexture = GraphBuilder.CreateUAV(PersistentDepthTex0);
 	}
 
-	FRDGTextureRef DeformNormalAndDepthTex = GraphBuilder.RegisterExternalTexture(DeformationSceneViewExtension->DeformNormalAndDepth);
+	FRDGTextureRef DeformNormalAndDepthTex = GraphBuilder.RegisterExternalTexture(GDeformationRenderResources.DeformNormalAndDepth);
 	FRDGTextureUAVRef OutputUAV = GraphBuilder.CreateUAV(DeformNormalAndDepthTex);
 	PassParameters->OutputTexture = OutputUAV;
 
@@ -95,8 +90,9 @@ void DeformationFilterPass(FRDGBuilder& GraphBuilder, const FSceneView& View, FD
 
 	FComputeShaderUtils::AddPass(GraphBuilder, RDG_EVENT_NAME("DeformationHeightFilterCS"), ComputeShader, PassParameters, FComputeShaderUtils::GetGroupCount(FIntPoint(DeformationPayload->InteractionTextureResolution), FIntPoint(16)));
 
-	if(DeformationSceneViewExtension->DeformationPayload->DeformNormalAndDepth)
-		GraphBuilder.RHICmdList.CopyTexture(DeformationSceneViewExtension->DeformNormalAndDepth->GetRHI(), DeformationSceneViewExtension->DeformationPayload->DeformNormalAndDepth, {});
+	if(DeformationSceneViewExtension->DeformationPayload->DeformNormalAndDepth->IsValid())
+		GraphBuilder.RHICmdList.CopyTexture(GDeformationRenderResources.DeformNormalAndDepth->GetRHI(), DeformationSceneViewExtension->DeformationPayload->DeformNormalAndDepth, {});
 
 	DeformationPayload->ExcuteCounter++;
+	DeformationSceneViewExtension->bActiveThisFrame = false;
 }
