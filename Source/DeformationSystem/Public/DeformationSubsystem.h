@@ -63,15 +63,15 @@ public:
 
 public:
 	UPROPERTY()
-	USceneCaptureComponent2D* DepthCaptureComponent;
+	TObjectPtr<USceneCaptureComponent2D> DepthCaptureComponent;
 	UPROPERTY()
-	UTextureRenderTarget2D* DepthRT;
+	TObjectPtr<UTextureRenderTarget2D> DepthRT;
 	UPROPERTY()
-	UTextureRenderTarget2D* DeformNormalDepthTexture;
+	TObjectPtr<UTextureRenderTarget2D> DeformNormalDepthTexture;
 	UPROPERTY()
-	UMaterialParameterCollection* DeformationMPC;
+	TObjectPtr<UMaterialParameterCollection>DeformationMPC;
 	UPROPERTY()
-	UMaterialInterface* SceneCaptureMaterial;
+	TObjectPtr<UMaterialInterface> SceneCaptureMaterial;
 
 private:
 	bool bExecuteFilter = false;
